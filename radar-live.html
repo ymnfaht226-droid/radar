@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="theme-color" content="#0a1317">
-<title>رادار الحركة المباشر</title>
+<title>رادار اليمان</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Arabic:wght@400;500;700&display=swap">
 <style>
 :root{
@@ -56,7 +56,7 @@ h2{margin:0 0 8px;font-size:13px;font-weight:500;color:var(--muted)}
 <body>
 <div class="app">
   <header class="top">
-    <h1>رادار الحركة المباشر</h1>
+    <h1>رادار اليمان</h1>
     <span class="pill" id="status" role="status" aria-live="polite">عرض تجريبي</span>
   </header>
 
@@ -77,12 +77,6 @@ h2{margin:0 0 8px;font-size:13px;font-weight:500;color:var(--muted)}
 
   <div class="video-box" id="vbox" hidden><video id="vid" muted playsinline autoplay></video><canvas id="ov"></canvas></div>
 
-  <div class="slider">
-    <label for="sens">الحساسية</label>
-    <input type="range" id="sens" min="1" max="10" value="5">
-    <output id="sensOut" for="sens">5</output>
-  </div>
-
   <section class="log">
     <h2>سجل الرصد</h2>
     <ol id="log" hidden></ol>
@@ -96,8 +90,8 @@ h2{margin:0 0 8px;font-size:13px;font-weight:500;color:var(--muted)}
 (function(){
   var $=function(i){return document.getElementById(i)};
   var radar=$('radar'),rctx=radar.getContext('2d'),ov=$('ov'),octx=ov.getContext('2d');
-  var vid=$('vid'),vbox=$('vbox'),statusEl=$('status'),sens=$('sens');
-  var LIFE=2.6,AW=0,AH=0,prev=null,stream=null,facing='environment',t0cam=0;
+  var vid=$('vid'),vbox=$('vbox'),statusEl=$('status');
+  var noise=0,LIFE=2.6,AW=0,AH=0,prev=null,stream=null,facing='environment',t0cam=0;
   var acan=document.createElement('canvas'),actx=acan.getContext('2d',{willReadFrequently:true});
   var C={panel:'#101d23',muted:'#8aa4ad',grid:'#26414a',sweep:'#4fe0c0',blip:'#ffb547'};
   var S={mode:'demo',blips:[],targets:[],shake:false,lastLog:-9,log:[]};
@@ -127,13 +121,16 @@ h2{margin:0 0 8px;font-size:13px;font-weight:500;color:var(--muted)}
 
   function analyze(now){
     if(!AW)return;
-    var s=+sens.value,minCells=Math.max(2,22-s*2),thr=40-s*2.5;
+    /* حساسية تلقائية: الحد الأدنى يرتفع كلما زاد ضجيج الصورة (إضاءة ضعيفة أو وميض) */
+    var minCells=Math.max(6,Math.round(AW*AH*.0014)),thr=24+Math.min(22,noise*700);
     try{actx.drawImage(vid,0,0,AW,AH)}catch(e){return}
     var d=actx.getImageData(0,0,AW,AH).data,n=AW*AH,cur=new Uint8Array(n);
     for(var i=0,j=0;i<n;i++,j+=4)cur[i]=(d[j]+d[j+1]+d[j+2])/3;
     if(!prev||prev.length!==n){prev=cur;return}
+    /* تعويض تغيّر السطوع العام (التعريض التلقائي للكاميرا) */
+    var shift=0;for(var m=0;m<n;m++)shift+=cur[m]-prev[m];shift/=n;
     var mask=new Uint8Array(n),ch=0;
-    for(var k=0;k<n;k++){if(Math.abs(cur[k]-prev[k])>thr){mask[k]=1;ch++}}
+    for(var k=0;k<n;k++){if(Math.abs(cur[k]-prev[k]-shift)>thr){mask[k]=1;ch++}}
     prev=cur;
     if(ch/n>.35){S.shake=true;S.targets=[];return}
     S.shake=false;
@@ -141,6 +138,7 @@ h2{margin:0 0 8px;font-size:13px;font-weight:500;color:var(--muted)}
       var cx=(b.x0+b.x1)/2,r=toRadar(cx,b.y1);
       return{x0:b.x0,x1:b.x1,y0:b.y0,y1:b.y1,cx:cx,a:r.a,d:r.d};
     });
+    if(!S.targets.length)noise=noise*.95+(ch/n)*.05;
     S.targets.forEach(function(t){S.blips.push({a:t.a,d:t.d,t:now})});
     if(S.targets.length&&now-S.lastLog>1){
       S.lastLog=now;
@@ -245,7 +243,7 @@ h2{margin:0 0 8px;font-size:13px;font-weight:500;color:var(--muted)}
     }
     vid.srcObject=stream;vbox.hidden=false;
     try{await vid.play()}catch(e){}
-    S.mode='live';S.blips=[];S.targets=[];S.log=[];S.lastLog=-9;prev=null;t0cam=performance.now()/1000;renderLog();
+    noise=0;S.mode='live';S.blips=[];S.targets=[];S.log=[];S.lastLog=-9;prev=null;t0cam=performance.now()/1000;renderLog();
     $('start').textContent='إيقاف الكاميرا';$('flip').disabled=false;
     try{if(navigator.wakeLock)wake=await navigator.wakeLock.request('screen')}catch(e){}
   }
@@ -261,7 +259,6 @@ h2{margin:0 0 8px;font-size:13px;font-weight:500;color:var(--muted)}
   });
   $('start').addEventListener('click',function(){stream?stopCamera():startCamera()});
   $('flip').addEventListener('click',function(){facing=facing==='environment'?'user':'environment';startCamera()});
-  sens.addEventListener('input',function(){$('sensOut').textContent=sens.value});
   document.addEventListener('visibilitychange',function(){
     if(document.visibilityState==='visible'&&stream&&!wake&&navigator.wakeLock){navigator.wakeLock.request('screen').then(function(w){wake=w}).catch(function(){})}
   });
