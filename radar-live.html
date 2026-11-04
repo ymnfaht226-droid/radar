@@ -96,6 +96,12 @@ h2{margin:0 0 8px;font-size:13px;font-weight:500;color:var(--muted)}
   var C={panel:'#101d23',muted:'#8aa4ad',grid:'#26414a',sweep:'#4fe0c0',blip:'#ffb547'};
   var S={mode:'demo',blips:[],targets:[],shake:false,lastLog:-9,log:[]};
   var wake=null;
+  /* لون النقطة: برتقالي عند البعد ثم يتدرج إلى الأحمر كلما اقترب الجسم (بعد أقل من 55%) */
+  function nearColor(d){
+    var k=Math.min(1,Math.max(0,(0.55-d)/0.30));
+    var r=255,g=Math.round(181-(181-45)*k),b=Math.round(71-(71-45)*k);
+    return 'rgb('+r+','+g+','+b+')';
+  }
 
   function setStatus(t,tone){if(statusEl.textContent!==t)statusEl.textContent=t;statusEl.className='pill'+(tone?' '+tone:'')}
   function fmt(s){var m=Math.floor(s/60),r=s-m*60;return String(m).padStart(2,'0')+':'+(r<10?'0':'')+r.toFixed(1)}
@@ -181,7 +187,8 @@ h2{margin:0 0 8px;font-size:13px;font-weight:500;color:var(--muted)}
     S.blips=S.blips.filter(function(b){return now-b.t<LIFE});
     S.blips.forEach(function(b){
       var age=now-b.t,f=1-age/LIFE,rr=R*b.d,x=cx+rr*Math.cos(b.a),y=cy-rr*Math.sin(b.a);
-      c.globalAlpha=f;c.fillStyle=C.blip;c.strokeStyle=C.blip;c.lineWidth=1.5;
+      var col=nearColor(b.d);
+      c.globalAlpha=f;c.fillStyle=col;c.strokeStyle=col;c.lineWidth=1.5;
       c.beginPath();c.arc(x,y,4.5,0,7);c.fill();
       c.globalAlpha=f*.5;c.beginPath();c.arc(x,y,7+age*6,0,7);c.stroke();
     });
@@ -193,7 +200,7 @@ h2{margin:0 0 8px;font-size:13px;font-weight:500;color:var(--muted)}
     if(vbox.hidden)return;
     var sz=sizeCanvas(ov,octx);if(!sz)return;
     octx.clearRect(0,0,sz.w,sz.h);if(S.mode!=='live')return;
-    octx.strokeStyle=C.blip;octx.lineWidth=2;
+    octx.strokeStyle='#ff2d2d';octx.lineWidth=3;
     S.targets.forEach(function(t){octx.strokeRect(t.x0*sz.w,t.y0*sz.h,(t.x1-t.x0)*sz.w,(t.y1-t.y0)*sz.h)});
   }
 
@@ -211,7 +218,7 @@ h2{margin:0 0 8px;font-size:13px;font-weight:500;color:var(--muted)}
     else{$('rNear').textContent='—';$('rDir').textContent='—'}
     if(S.mode==='demo')return setStatus('عرض تجريبي','live');
     if(S.shake)return setStatus('اهتزاز الكاميرا','');
-    ts.length?setStatus('تم رصد حركة','alert'):setStatus('لا حركة','live');
+    ts.length?setStatus(ts.some(function(t){return t.d<.55})?'جسم قريب':'تم رصد حركة','alert'):setStatus('لا حركة','live');
   }
 
   var lastStep=0,lastUi=0;
